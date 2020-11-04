@@ -5,6 +5,7 @@ import cv2
 import datetime
 from scipy.ndimage import map_coordinates
 import enum
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 def center_to_edge(center):
     center = np.asarray(center)
@@ -105,7 +106,21 @@ for date in dates:
     axes[0].set_yticklabels(radar_ds.cloud_flag.flag_meanings.split())
 
     finite = np.isfinite(radar_ds.cloud_top + wales_top_hamp.values)
-    axes[1].hist((radar_ds.cloud_top-wales_top_hamp.values)[finite], bins=100)
+    axes[1].hist((radar_ds.cloud_top-wales_top_hamp.values)[finite], bins=100, density=True)
+
+    axins = inset_axes(axes[1], width='50%', height='70%', loc=1)
+    axins.hist((radar_ds.cloud_top-wales_top_hamp.values)[finite], bins=np.linspace(-100, 100, 60), density=True)
+
+    axins.set_xlim(-100, 100)
+    axins.set_xticks([-100, 0, 100])
+    # fix the number of ticks on the inset axes
+    axins.yaxis.get_major_locator().set_params(nbins=7)
+    axins.axvline(0, color='#cccccc')
+
+    # draw a bbox of the region of the inset axes in the parent axes and
+    # connecting lines between the bbox and the inset axes area
+    mark_inset(axes[1], axins, loc1=3, loc2=4, fc="none", ec="#cccccc")
+
     axes[1].set_xlabel('radar top height - lidar top height')
 
     fig.tight_layout()
