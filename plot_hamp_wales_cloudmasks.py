@@ -53,33 +53,41 @@ def center_to_edge(center):
     return edge
 
 dates = [
+    #'20200119', # TODO: when retrieval is redone after solving the time offset in WF.
+    '20200122', # no radar
     '20200124',
     '20200126',
     '20200128',
     '20200130',
-    '20200131',
+    #'20200131', # TODO
     '20200202',
     '20200205',
     '20200207',
     '20200209',
     '20200211',
     '20200213',
-    #'20200218', # ferry home, no masks
+    #'20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
+    '20200218', # ferry home
 ]
 for date in dates:
 
-    radar_ds = xarray.open_dataset(f'./out/netcdf/HAMP_RADAR_cloud_mask_{date}.nc')
-    radiometer_ds = xarray.open_dataset(f'./out/netcdf/HAMP_MWR_cloud_mask_{date}.nc')
+    radar_ds = xarray.open_dataset(f'./out/netcdf/HAMP_RADAR_cloud_mask_{date}_v0.6.nc')
+    radiometer_ds = xarray.open_dataset(f'./out/netcdf/HAMP_MWR_cloud_mask_{date}_v0.6.nc')
 
     radar = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/unified/radar_{date}_v0.6.nc')
     assert np.allclose((radar.time - radar_ds.time.values)/np.timedelta64(1, 's'), 0, atol=1)
     radar.assign_coords(time=radar_ds.time) # fix issue with time rounding
 
-    wales = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/{date}/WALES-LIDAR/EUREC4A_HALO_WALES_cloudtop_{date}a_V1.nc')
-    wales_flag_hamp = wales.cloud_flag.rolling(time=5).mean().interp_like(radar_ds.time)
-    wales_top_hamp = wales.cloud_top.rolling(time=5).mean().interp_like(radar_ds.time)
-    wales_ot_hamp = wales.cloud_ot.rolling(time=5).mean().interp_like(radar_ds.time)
-    wales_on_hamp = wales.interp_like(radar_ds.time)
+    if date in ('20200119', '20200218'):
+        wales_flag_hamp = xarray.full_like(radiometer_ds.cloud_flag, np.nan, dtype=float)
+        wales_top_hamp = xarray.full_like(radiometer_ds.cloud_flag, np.nan, dtype=float)
+        wales_ot_hamp = xarray.full_like(radiometer_ds.cloud_flag, np.nan, dtype=float)
+    else:
+        wales = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/{date}/WALES-LIDAR/EUREC4A_HALO_WALES_cloudtop_{date}a_V1.nc')
+        wales_flag_hamp = wales.cloud_flag.rolling(time=5).mean().interp_like(radar_ds.time)
+        wales_top_hamp = wales.cloud_top.rolling(time=5).mean().interp_like(radar_ds.time)
+        wales_ot_hamp = wales.cloud_ot.rolling(time=5).mean().interp_like(radar_ds.time)
+        wales_on_hamp = wales.interp_like(radar_ds.time)
 
 
     ###
@@ -97,10 +105,11 @@ for date in dates:
     ax.legend()
     ax.grid()
 
-    dBZ = radar.dBZ.transpose('height', 'time').values
-    x = center_to_edge(radar.time)
-    y = center_to_edge(radar.height)
-    ax2.pcolormesh(x, y, dBZ, vmin=-40, vmax=20, cmap='gray')
+    if date != '20200122': # radar was broken
+        dBZ = radar.dBZ.transpose('height', 'time').values
+        x = center_to_edge(radar.time)
+        y = center_to_edge(radar.height)
+        ax2.pcolormesh(x, y, dBZ, vmin=-40, vmax=20, cmap='gray')
     ax2.plot(
         wales_top_hamp.time, wales_top_hamp.where(wales_ot_hamp>1) + wgs84_height(radar_ds.lon, radar_ds.lat),
         linewidth=0.5
@@ -113,7 +122,7 @@ for date in dates:
     ax2.set_ylim(0, 4500)
     ax2.grid()
     fig.tight_layout()
-    fig.savefig(f'./out/quicklooks/timeseries_{date}.png', dpi=200)
+    fig.savefig(f'./out/quicklooks/timeseries_{date}_v0.6.png', dpi=200)
     plt.close(fig)
 
 
@@ -161,22 +170,5 @@ for date in dates:
     axes[1].set_xlabel('radar top height - lidar top height')
 
     fig.tight_layout()
-    fig.savefig(f'./out/quicklooks/stats_{date}.png', dpi=200)
+    fig.savefig(f'./out/quicklooks/stats_{date}_v0.6.png', dpi=200)
     plt.close(fig)
-
-    # fig, ax = plt.subplots()
-    # for flag in Cloud_flag:
-    #     wales_ot_hamp.where(radar_mask==flag).plot.hist(ax=ax, bins=40, label=flag.name, histtype='step')
-    # ax.legend()
-    #plt.show()
-    break
-
-
-
-
-import sys; sys.exit(66)
-###########
-fig, axes = plt.subplots(nrows=2, sharex=True)
-axes[0].plot(bahamas['roll'])
-axes[1].imshow(radar.dBZ.where(radar_mask != -1).values.T, vmin=-30, vmax=20, aspect='auto', origin='lower')
-axes[0].grid(); axes[1].grid();

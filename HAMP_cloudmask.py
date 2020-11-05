@@ -61,20 +61,6 @@ class Cloud_flag(enum.IntEnum):
     probably = 1
     certain = 2
 
-dates = [
-    #'20200124',
-    #'20200126',
-    #'20200128',
-    #'20200130',
-    #'20200131',
-    #'20200202',
-    '20200205',
-    '20200207',
-    #'20200209',
-    #'20200211',
-    #'20200213',
-    #'20200218', # ferry home
-]
 
 def calc_radar_mask(data_flag, clutter_threshold=4):
     assert data_flag.dims == ('time', 'height')
@@ -119,8 +105,8 @@ def calc_radar_top_height(radar_mask, data_flag):
     # Reverse height, such that argmax finds the first (probably ) cloudy pixel from the top
     data_flag_r = data_flag.isel(height=np.s_[::-1])
     pc_pixel = (data_flag_r==Radar_flag.good).where(
-        (radar_mask == Cloud_flag.probably) |
-        (radar_mask == Cloud_flag.certain),
+        (radar_mask == Cloud_flag.probably) | # probably
+        (radar_mask == Cloud_flag.certain), # certain pixe
         drop=True
     )
     assert np.all(pc_pixel.height.diff('height') < 0), 'dBZ.height is not strong monotonously decreasing.'
@@ -181,53 +167,56 @@ def make_HAMP_cloudmask(
 
     radar = xarray.open_dataset(radar_name)
     assert np.allclose((radar.time - retrieval.time.values)/np.timedelta64(1, 's'), 0, atol=1)
-    radar['time'].values = retrieval.time.values # fix issue with time rounding
+    radar.assign_coords(time=retrieval.time) # fix issue with time rounding
     assert radar.height.units == 'm'
 
-    radar = radar.sel(height=np.s_[200:])
+    if '20200122' in radar_name: # radar was not working
+        radar_cloud_top_height = xarray.full_like(radiometer_mask, np.nan, dtype=float)
+        radar_mask = xarray.full_like(radiometer_mask, Cloud_flag.unknown, dtype=float)
+    else:
+        radar = radar.sel(height=np.s_[200:])
 
-    dBZ = radar.dBZ.copy()
-    data_flag = radar.data_flag.copy()
-    assert radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration'
+        dBZ = radar.dBZ.copy()
+        data_flag = radar.data_flag.copy()
+        assert radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration'
 
-    assert np.isneginf(dBZ).any() # neginf means measured, but nothing seen, i.e. signal below noise detection
-    data_flag.values[np.isneginf(dBZ) & (data_flag==0)] = Radar_flag.clear
+        assert np.isneginf(dBZ).any() # neginf means measured, but nothing seen, i.e. signal below noise detection
+        data_flag.values[np.isneginf(dBZ) & (data_flag==0)] = Radar_flag.clear
 
-    # if roll angle > 5, radar gates at altitude >  150 m are affected by sidle lobe echo of the ground
-    data_flag.values[(np.abs(bahamas['roll']) > 5)] = Radar_flag.high_roll # high roll angle
+        # if roll angle > 5, radar gates at altitude >  150 m are affected by sidle lobe echo of the ground
+        data_flag.values[(np.abs(bahamas['roll']) > 5)] = Radar_flag.high_roll # high roll angle
 
-    data_flag.values[np.isnan(dBZ) & (data_flag==0)] = Radar_flag.no_measurement
-    # There are gaps in the 1 Hz data every about 30 seconds. (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
-    # Filter for small clouds/clutter pixels, than fix these gaps!
-    gap_mask = (data_flag == Radar_flag.no_measurement).all('height') # measurement 'gaps' in 1 Hz time series
+        data_flag.values[np.isnan(dBZ) & (data_flag==0)] = Radar_flag.no_measurement
+        # There are gaps in the 1 Hz data every about 30 seconds. (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
+        # Filter for small clouds/clutter pixels, than fix these gaps!
+        gap_mask = (data_flag == Radar_flag.no_measurement).all('height') # measurement 'gaps' in 1 Hz time series
 
-    same_as_previous = np.concatenate(([True], gap_mask.values[:-1] == gap_mask[1:]))
-    same_as_next = np.concatenate((gap_mask.values[:-1] == gap_mask[1:], [True]))
-    gap_mask[same_as_previous | same_as_next] = False # A gap must be only one time step. If if the previous or next were also gaps, remove this gap.
-    assert length_of_True_chunks(gap_mask).max() <= 1, 'something went wrong in constraining the gaps'
+        same_as_previous = np.concatenate(([True], gap_mask.values[:-1] == gap_mask[1:]))
+        same_as_next = np.concatenate((gap_mask.values[:-1] == gap_mask[1:], [True]))
+        gap_mask[same_as_previous | same_as_next] = False # A gap must be only one time step. If if the previous or next were also gaps, remove this gap.
+        assert length_of_True_chunks(gap_mask).max() <= 1, 'something went wrong in constraining the gaps'
 
-    dBZ_observed = dBZ.isel(time=~gap_mask)
-    data_flag_observed = data_flag.isel(time=~gap_mask)
+        dBZ_observed = dBZ.isel(time=~gap_mask)
+        data_flag_observed = data_flag.isel(time=~gap_mask)
 
-    radar_mask_obseverd = calc_radar_mask(data_flag_observed)
+        radar_mask_obseverd = calc_radar_mask(data_flag_observed)
 
-    # fill measurement gaps in dBZ and radar_mask
-    dBZ_interpolated = dBZ_observed.interp(time=dBZ.time, method='nearest',
-        kwargs=dict(fill_value=np.nan))
+        # fill measurement gaps in dBZ and radar_mask
+        dBZ_interpolated = dBZ_observed.interp(time=dBZ.time, method='nearest',
+            kwargs=dict(fill_value=np.nan))
 
-    data_flag = data_flag_observed.interp(time=dBZ.time, method='nearest',
-        kwargs=dict(fill_value=Radar_flag.no_measurement))
-    data_flag = data_flag.astype(int)
-    assert set(Radar_flag).issuperset(np.unique(data_flag)), 'data_flag contains some non-Radar_flag values.'
+        data_flag = data_flag_observed.interp(time=dBZ.time, method='nearest',
+            kwargs=dict(fill_value=Radar_flag.no_measurement))
+        data_flag = data_flag.astype(int)
+        assert set(Radar_flag).issuperset(np.unique(data_flag)), 'data_flag contains some non-Radar_flag values.'
 
-    radar_mask = radar_mask_obseverd.interp(time=dBZ.time, method='nearest',
-        kwargs=dict(fill_value=Cloud_flag.unknown))
-    radar_mask = radar_mask.astype(int)
-    assert set(Cloud_flag).issuperset(np.unique(radar_mask)), 'radar_mask contains some non-Cloud_flag values.'
+        radar_mask = radar_mask_obseverd.interp(time=dBZ.time, method='nearest',
+            kwargs=dict(fill_value=Cloud_flag.unknown))
+        radar_mask = radar_mask.astype(int)
+        assert set(Cloud_flag).issuperset(np.unique(radar_mask)), 'radar_mask contains some non-Cloud_flag values.'
 
-
-    radar_top = calc_radar_top_height(radar_mask, data_flag)
-    radar_cloud_top_height = radar_top - wgs84_height(radar_mask.lon, radar_mask.lat)
+        radar_top = calc_radar_top_height(radar_mask, data_flag)
+        radar_cloud_top_height = radar_top - wgs84_height(radar_mask.lon, radar_mask.lat)
 
     ###
     # export as NC
@@ -297,7 +286,9 @@ def make_HAMP_cloudmask(
     radiometer_mask_ds['lat'] = radar_mask_ds.lat
     radiometer_mask_ds['lon'] = radar_mask_ds.lon
 
-    radiometer_mask_ds['cloud_flag'] = ['time'], radiometer_mask.values.astype(np.int8), dict(
+    rmv = radiometer_mask.values
+    rmv[radiometer_mask_ds.lat>20] = Cloud_flag.unknown # We don't use the LWP retrieval north of 20 deg N.
+    radiometer_mask_ds['cloud_flag'] = ['time'], rmv.astype(np.int8), dict(
         long_name='cloud flag',
         flag_values=np.array(
             [Cloud_flag.unknown, Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
@@ -315,12 +306,28 @@ def make_HAMP_cloudmask(
 
     radiometer_mask_ds.to_netcdf(out_name.format(instrument='HAMP_MWR'), format='NETCDF4', encoding=encoding)
 
-
+dates = [
+    #'20200119', # TODO: when retrieval is redone after solving the time offset in WF.
+    '20200122', # no radar
+    '20200124',
+    '20200126',
+    '20200128',
+    '20200130',
+    #'20200131', # TODO: Half of radar is missing
+    '20200202',
+    '20200205',
+    '20200207',
+    '20200209',
+    '20200211',
+    '20200213',
+    #'20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
+    '20200218', # ferry home
+]
 for date in dates:
-    retrieval_name=f'/media/data/Marek/Promotion-Köln/programmierung/data/EUREC4A/LWP_IWV/hamp_II_lwp_iwv_{date}_v0.3.1.6_2020-10-30.nc'
-    bahamas_name=f'/media/data/Marek/Promotion-Köln/EUREC4A/data/unified/bahamas_{date}_v0.6.nc'
-    radar_name=f'/media/data/Marek/Promotion-Köln/EUREC4A/data/unified/radar_{date}_v0.6.nc'
-    out_name=f'./out/netcdf/{{instrument}}_cloud_mask_{date}.nc'
+    retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/hamp_II_lwp_iwv_{date}_v0.3.1.6_2020-10-30.nc'
+    bahamas_name=f'/data/hamp/flights/EUREC4A/unified/bahamas_{date}_v0.6.nc'
+    radar_name=f'/data/hamp/flights/EUREC4A/unified/radar_{date}_v0.6.nc'
+    out_name=f'./out/netcdf/{{instrument}}_cloud_mask_{date}_v0.6.nc'
     make_HAMP_cloudmask(
         retrieval_name,
         bahamas_name,
