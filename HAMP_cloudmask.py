@@ -150,6 +150,8 @@ def make_HAMP_cloudmask(
     radar_name,
     out_name,
 ):
+
+    clutter_threshold = 4
     retrieval = xarray.open_dataset(retrieval_name)
 
     ###
@@ -180,8 +182,16 @@ def make_HAMP_cloudmask(
         data_flag = radar.data_flag.copy()
         assert radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration'
 
-        assert np.isneginf(dBZ).any() # neginf means measured, but nothing seen, i.e. signal below noise detection
-        data_flag.values[np.isneginf(dBZ) & (data_flag==0)] = Radar_flag.clear
+        if radar_name[-23:-10] in ('/radar_201312', '/radar_201608'): # NARVAL
+            assert np.isneginf(dBZ).any(), 'neginf should be used to mark "measured, but nothing seen, i.e. signal below noise detection" pixels'
+            data_flag.values[np.isneginf(dBZ) & (data_flag==Radar_flag.good)] = Radar_flag.clear
+        else: # EUREC4A
+            assert not np.isneginf(dBZ).any(), 'neginf should not be used anymore to mark "measured, but nothing seen, i.e. signal below noise detection" pixels'
+            radar_raw = xarray.open_dataset(radar_name, mask_and_scale=False)
+            assert radar_raw.dBZ.missing_value == -888., '-888. should have been used to mark "measurement, but nothing seen"'
+            data_flag.values[(radar_raw.dBZ == radar_raw.dBZ.missing_value) & (data_flag==Radar_flag.good)] = Radar_flag.clear
+
+        assert  Radar_flag.clear in data_flag.values, 'Could not find any clear sky. That is suspicious. Maybe the identification is wrong?'
 
         # if roll angle > 5, radar gates at altitude >  150 m are affected by sidle lobe echo of the ground
         data_flag.values[(np.abs(bahamas['roll']) > 5)] = Radar_flag.high_roll # high roll angle
@@ -199,7 +209,7 @@ def make_HAMP_cloudmask(
         dBZ_observed = dBZ.isel(time=~gap_mask)
         data_flag_observed = data_flag.isel(time=~gap_mask)
 
-        radar_mask_obseverd = calc_radar_mask(data_flag_observed)
+        radar_mask_obseverd = calc_radar_mask(data_flag_observed, clutter_threshold=clutter_threshold)
 
         # fill measurement gaps in dBZ and radar_mask
         dBZ_interpolated = dBZ_observed.interp(time=dBZ.time, method='nearest',
@@ -237,7 +247,12 @@ def make_HAMP_cloudmask(
 
     radar_mask_ds['cloud_top'] = ['time'], radar_cloud_top_height.values, dict(
         long_name='cloud top height above sea level',
+        standard_name='height_at_cloud_top',
         units='m',
+        description=(
+            'For each time step at which a cloud is (probably) detected, this variable reports the '
+            + 'height of the upper most range gate having a signal above noise level.'
+        ),
     )
     radar_mask_ds['cloud_flag'] = ['time'], radar_mask.values.astype(np.int8), dict(
         long_name='cloud flag',
@@ -245,7 +260,15 @@ def make_HAMP_cloudmask(
             [Cloud_flag.unknown, Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
             dtype=np.int8
         ),
-        flag_meanings='unknown clear_sky probably_cloudy cloudy',
+        flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
+        description=(
+            'For this mask the observations of radar reflectivity are used. Radar reflectivity is '
+            + 'first filtered for clutter. Then if there is any signal above the noise level at '
+            + '200 m above sea level or '
+            + 'above, this is considered either cloud or still clutter. If signal originates from '
+            + f'an object of at least {clutter_threshold:d} pixels size it is most likely, '
+            + 'otherwise probably a cloud signal.'
+        ),
     )
 
     encoding = {k: {'zlib':True, 'fletcher32':True} for k in radar_mask_ds.variables}
@@ -259,12 +282,16 @@ def make_HAMP_cloudmask(
 
     # Some meta data
     attrs = collections.OrderedDict()
-    attrs['convention'] = 'CF-1.7'
-    attrs['location_name'] = 'HALO'
-    attrs['platform'] = 'HALO'
-    attrs['instrument'] = 'HAMP RARAR'
-    attrs['system'] = 'MIRA35'
+    #attrs['convention'] = 'CF-1.7'
     attrs['title'] = 'HAMP Radar Cloud Mask'
+    attrs['platform'] = "HALO" ;
+    attrs['variable'] = "cloud_flag"
+    attrs['campaign'] = "EUREC4A"
+    attrs['instrument'] = 'HAMP Radar'
+    attrs['research_flight_date'] = str(radar_mask_ds['time'].min().dt.strftime('%Y-%m-%d').values)
+    attrs['contact'] = 'marek.jacob@uni-koeln.de'
+    attrs['citation'] = 'please contact the authors if you want to use the data for publications'
+    attrs['source'] = 'Cloud radar METEK MIRA35'
     attrs['institution'] = 'Institute for Geophysics and Meteorology, University of Cologne'
     attrs['author'] = 'Marek Jacob'
     attrs['dependencies'] = ' '.join(os.path.basename(s) for s in (retrieval_name, bahamas_name, radar_name))
@@ -275,10 +302,9 @@ def make_HAMP_cloudmask(
     attrs['min_longitude'] = radar_mask_ds['lon'].min().values
     attrs['start_datetime'] = str(radar_mask_ds['time'].min().dt.strftime('%Y-%m-%dT%H:%M:%S').values)
     attrs['stop_datetime'] = str(radar_mask_ds['time'].max().dt.strftime('%Y-%m-%dT%H:%M:%S').values)
-    attrs['mission'] = 'EUREC4A'
     radar_mask_ds.attrs.update(attrs)
 
-    radar_mask_ds.to_netcdf(out_name.format(instrument='HAMP_RADAR'), format='NETCDF4', encoding=encoding)
+    radar_mask_ds.to_netcdf(out_name.format(instrument='HAMP-Radar'), format='NETCDF4', encoding=encoding)
 
     radiometer_mask_ds = xarray.Dataset(
         {'time': radar_mask_ds.time}
@@ -294,7 +320,13 @@ def make_HAMP_cloudmask(
             [Cloud_flag.unknown, Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
             dtype=np.int8
         ),
-        flag_meanings='unknown clear_sky probably_cloudy cloudy',
+        flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
+        description=(
+            'For this mask liquid water path (LWP) retrieval by Jacob et al. (2019, AMT, '
+            + 'https://doi.org/10.5194/amt-12-3237-2019) is used but without applying the '
+            + 'clear-sky offset adjustment using WALES backscatter lidar data. Thresholds of 20 '
+            + 'and 30 g.m^-2 are used to detect clouds at medium and high levels of confidence.'
+        ),
     )
 
     encoding = {k: {'zlib':True, 'fletcher32':True} for k in radiometer_mask_ds.variables}
@@ -302,9 +334,12 @@ def make_HAMP_cloudmask(
     encoding['time']['_FillValue'] = None
     encoding['lat']['_FillValue'] = None
     encoding['lon']['_FillValue'] = None
+    attrs['instrument'] = 'HAMP Microwave Radiometer'
+    attrs['source'] = 'Three RPG HALO MWR modules'
+    attrs['title'] = 'HAMP Microwave Radiometer Cloud Mask'
     radiometer_mask_ds.attrs.update(attrs)
 
-    radiometer_mask_ds.to_netcdf(out_name.format(instrument='HAMP_MWR'), format='NETCDF4', encoding=encoding)
+    radiometer_mask_ds.to_netcdf(out_name.format(instrument='HAMP-MWR'), format='NETCDF4', encoding=encoding)
 
 dates = [
     #'20200119', # TODO: when retrieval is redone after solving the time offset in WF.
@@ -326,8 +361,8 @@ dates = [
 for date in dates:
     retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/hamp_II_lwp_iwv_{date}_v0.3.1.6_2020-10-30.nc'
     bahamas_name=f'/data/hamp/flights/EUREC4A/unified/bahamas_{date}_v0.6.nc'
-    radar_name=f'/data/hamp/flights/EUREC4A/unified/radar_{date}_v0.6.nc'
-    out_name=f'./out/netcdf/{{instrument}}_cloud_mask_{date}_v0.6.nc'
+    radar_name=f'/data/hamp/flights/EUREC4A/unified/v0.6.1/radar_{date}_v0.6.nc'
+    out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_flag_{date}_v0.6.nc'
     make_HAMP_cloudmask(
         retrieval_name,
         bahamas_name,
