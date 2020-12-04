@@ -241,15 +241,17 @@ def make_HAMP_cloudmask(
     radar_mask_ds['lat'] = bahamas.lat
     radar_mask_ds.lat.attrs['units'] = 'degree_north' ;
     radar_mask_ds.lat.attrs['standard_name'] = 'latitude' ;
+    radar_mask_ds.lat.attrs['comment'] = 'Platform latitude coordinate'
     radar_mask_ds['lon'] = bahamas.lon
     radar_mask_ds.lon.attrs['units'] = 'degree_east' ;
     radar_mask_ds.lon.attrs['standard_name'] = 'longitude' ;
+    radar_mask_ds.lon.attrs['comment'] = 'Platform longitude coordinate'
 
     radar_mask_ds['cloud_top'] = ['time'], radar_cloud_top_height.values, dict(
         long_name='cloud top height above sea level',
         standard_name='height_at_cloud_top',
         units='m',
-        description=(
+        comment=(
             'For each time step at which a cloud is (probably) detected, this variable reports the '
             + 'height of the upper most range gate having a signal above noise level.'
         ),
@@ -261,7 +263,7 @@ def make_HAMP_cloudmask(
             dtype=np.int8
         ),
         flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
-        description=(
+        comment=(
             'For this mask the observations of radar reflectivity are used. Radar reflectivity is '
             + 'first filtered for clutter. Then if there is any signal above the noise level at '
             + '200 m above sea level or '
@@ -294,6 +296,7 @@ def make_HAMP_cloudmask(
     attrs['source'] = 'Cloud radar METEK MIRA35'
     attrs['institution'] = 'Institute for Geophysics and Meteorology, University of Cologne'
     attrs['author'] = 'Marek Jacob'
+    attrs['featureType'] = 'trajectory'
     attrs['dependencies'] = ' '.join(os.path.basename(s) for s in (retrieval_name, bahamas_name, radar_name))
     attrs['history'] = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') + ' UTC: created'
     attrs['max_latitude'] = radar_mask_ds['lat'].max().values
@@ -321,7 +324,7 @@ def make_HAMP_cloudmask(
             dtype=np.int8
         ),
         flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
-        description=(
+        comment=(
             'For this mask liquid water path (LWP) retrieval by Jacob et al. (2019, AMT, '
             + 'https://doi.org/10.5194/amt-12-3237-2019) is used but without applying the '
             + 'clear-sky offset adjustment using WALES backscatter lidar data. Thresholds of 20 '
