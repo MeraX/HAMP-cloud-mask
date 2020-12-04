@@ -51,8 +51,9 @@ class Radar_flag(enum.IntEnum):
     surface = 2
     sea = 3
     calibration = 4
-    no_measurement = 5
-    high_roll = 6
+    side_lobes = 5
+    no_measurement = 6
+    high_roll = 7
 
 @enum.unique
 class Cloud_flag(enum.IntEnum):
@@ -180,7 +181,7 @@ def make_HAMP_cloudmask(
 
         dBZ = radar.dBZ.copy()
         data_flag = radar.data_flag.copy()
-        assert radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration'
+        assert radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration; 5: side lobes removed', radar.data_flag.long_name
 
         if radar_name[-23:-10] in ('/radar_201312', '/radar_201608'): # NARVAL
             assert np.isneginf(dBZ).any(), 'neginf should be used to mark "measured, but nothing seen, i.e. signal below noise detection" pixels'
