@@ -238,6 +238,7 @@ def make_HAMP_cloudmask(
         # subsequent Arrays are added separately to have better control on the order
     )
     radar_mask_ds.time.encoding['units'] = 'seconds since 2020-01-01 00:00:00'
+    radar_mask_ds.time.attrs['long_name'] = 'time'
 
     radar_mask_ds['lat'] = bahamas.lat
     radar_mask_ds.lat.attrs['units'] = 'degree_north' ;
@@ -287,25 +288,34 @@ def make_HAMP_cloudmask(
     attrs = collections.OrderedDict()
     #attrs['convention'] = 'CF-1.7'
     attrs['title'] = 'HAMP Radar Cloud Mask'
+    attrs['version'] = "0.1" ;
+    attrs['contact'] = "marek.jacob@uni-koeln.de" ;
+    #attrs['comment'] = "" ;
     attrs['platform'] = "HALO" ;
-    attrs['variable'] = "cloud_flag"
     attrs['campaign'] = "EUREC4A"
+    attrs['variable'] = "cloud_flag"
     attrs['instrument'] = 'HAMP Radar'
-    attrs['research_flight_date'] = str(radar_mask_ds['time'].min().dt.strftime('%Y-%m-%d').values)
-    attrs['contact'] = 'marek.jacob@uni-koeln.de'
-    attrs['citation'] = 'please contact the authors if you want to use the data for publications'
     attrs['source'] = 'Cloud radar METEK MIRA35'
     attrs['institution'] = 'Institute for Geophysics and Meteorology, University of Cologne'
     attrs['author'] = 'Marek Jacob'
+    attrs['history'] = (
+        datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') +
+        ' UTC: created (based on ' +
+        ' '.join(os.path.basename(s) for s in (retrieval_name, bahamas_name, radar_name)) +
+        ')'
+    )
+    attrs['created_on'] = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') + ' UTC'
+    attrs['Conventions'] = 'CF-1.8'
+    #attrs['doi'] = ''
     attrs['featureType'] = 'trajectory'
-    attrs['dependencies'] = ' '.join(os.path.basename(s) for s in (retrieval_name, bahamas_name, radar_name))
-    attrs['history'] = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') + ' UTC: created'
-    attrs['max_latitude'] = radar_mask_ds['lat'].max().values
-    attrs['min_latitude'] = radar_mask_ds['lat'].min().values
-    attrs['max_longitude'] = radar_mask_ds['lon'].max().values
-    attrs['min_longitude'] = radar_mask_ds['lon'].min().values
-    attrs['start_datetime'] = str(radar_mask_ds['time'].min().dt.strftime('%Y-%m-%dT%H:%M:%S').values)
-    attrs['stop_datetime'] = str(radar_mask_ds['time'].max().dt.strftime('%Y-%m-%dT%H:%M:%S').values)
+    #attrs['research_flight_date'] = str(radar_mask_ds['time'].min().dt.strftime('%Y-%m-%d').values)
+    #attrs['citation'] = 'please contact the authors if you want to use the data for publications'
+    #attrs['max_latitude'] = radar_mask_ds['lat'].max().values
+    #attrs['min_latitude'] = radar_mask_ds['lat'].min().values
+    #attrs['max_longitude'] = radar_mask_ds['lon'].max().values
+    #attrs['min_longitude'] = radar_mask_ds['lon'].min().values
+    #attrs['start_datetime'] = str(radar_mask_ds['time'].min().dt.strftime('%Y-%m-%dT%H:%M:%S').values)
+    #attrs['stop_datetime'] = str(radar_mask_ds['time'].max().dt.strftime('%Y-%m-%dT%H:%M:%S').values)
     radar_mask_ds.attrs.update(attrs)
 
     radar_mask_ds.to_netcdf(out_name.format(instrument='HAMP-Radar'), format='NETCDF4', encoding=encoding)
