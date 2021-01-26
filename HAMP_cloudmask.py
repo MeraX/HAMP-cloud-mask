@@ -181,7 +181,10 @@ def make_HAMP_cloudmask(
 
         dBZ = radar.dBZ.copy()
         data_flag = radar.data_flag.copy()
-        assert radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration; 5: side lobes removed', radar.data_flag.long_name
+        assert (
+            (radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration; 5: side lobes removed') or
+            (radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration')
+        ), radar.data_flag.long_name
 
         if radar_name[-23:-10] in ('/radar_201312', '/radar_201608'): # NARVAL
             assert np.isneginf(dBZ).any(), 'neginf should be used to mark "measured, but nothing seen, i.e. signal below noise detection" pixels'
@@ -243,29 +246,32 @@ def make_HAMP_cloudmask(
     radar_mask_ds['lat'] = bahamas.lat
     radar_mask_ds.lat.attrs['units'] = 'degree_north' ;
     radar_mask_ds.lat.attrs['standard_name'] = 'latitude' ;
-    radar_mask_ds.lat.attrs['comment'] = 'Platform latitude coordinate'
+    radar_mask_ds.lat.attrs['long_name'] = 'latitude' ;
+    radar_mask_ds.lat.attrs['description'] = 'Platform latitude coordinate'
     radar_mask_ds['lon'] = bahamas.lon
     radar_mask_ds.lon.attrs['units'] = 'degree_east' ;
     radar_mask_ds.lon.attrs['standard_name'] = 'longitude' ;
-    radar_mask_ds.lon.attrs['comment'] = 'Platform longitude coordinate'
+    radar_mask_ds.lon.attrs['long_name'] = 'longitude' ;
+    radar_mask_ds.lon.attrs['description'] = 'Platform longitude coordinate'
 
     radar_mask_ds['cloud_top'] = ['time'], radar_cloud_top_height.values, dict(
         long_name='cloud top height above sea level',
         standard_name='height_at_cloud_top',
         units='m',
-        comment=(
+        description=(
             'For each time step at which a cloud is (probably) detected, this variable reports the '
             + 'height of the upper most range gate having a signal above noise level.'
         ),
     )
-    radar_mask_ds['cloud_flag'] = ['time'], radar_mask.values.astype(np.int8), dict(
+    radar_mask_ds['cloud_mask'] = ['time'], radar_mask.values.astype(np.int8), dict(
         long_name='cloud flag',
         flag_values=np.array(
-            [Cloud_flag.unknown, Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
+            [Cloud_flag.unknown,
+            Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
             dtype=np.int8
         ),
         flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
-        comment=(
+        description=(
             'For this mask the observations of radar reflectivity are used. Radar reflectivity is '
             + 'first filtered for clutter. Then if there is any signal above the noise level at '
             + '200 m above sea level or '
@@ -295,14 +301,14 @@ def make_HAMP_cloudmask(
     attrs['campaign'] = "EUREC4A"
     attrs['variable'] = "cloud_flag"
     attrs['instrument'] = 'HAMP Radar'
-    attrs['source'] = 'Cloud radar METEK MIRA35'
     attrs['institution'] = 'Institute for Geophysics and Meteorology, University of Cologne'
     attrs['author'] = 'Marek Jacob'
     attrs['history'] = (
-        datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') +
-        ' UTC: created (based on ' +
-        ' '.join(os.path.basename(s) for s in (retrieval_name, bahamas_name, radar_name)) +
-        ')'
+        datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') + ' UTC: created'
+    )
+    attrs['source'] = (
+        'From Cloud radar METEK MIRA35, based on ' +
+        ' '.join(os.path.basename(s) for s in (radar_name, bahamas_name))
     )
     attrs['created_on'] = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') + ' UTC'
     attrs['Conventions'] = 'CF-1.8'
@@ -328,14 +334,14 @@ def make_HAMP_cloudmask(
 
     rmv = radiometer_mask.values
     rmv[radiometer_mask_ds.lat>20] = Cloud_flag.unknown # We don't use the LWP retrieval north of 20 deg N.
-    radiometer_mask_ds['cloud_flag'] = ['time'], rmv.astype(np.int8), dict(
+    radiometer_mask_ds['cloud_mask'] = ['time'], rmv.astype(np.int8), dict(
         long_name='cloud flag',
         flag_values=np.array(
             [Cloud_flag.unknown, Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
             dtype=np.int8
         ),
         flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
-        comment=(
+        description=(
             'For this mask liquid water path (LWP) retrieval by Jacob et al. (2019, AMT, '
             + 'https://doi.org/10.5194/amt-12-3237-2019) is used but without applying the '
             + 'clear-sky offset adjustment using WALES backscatter lidar data. Thresholds of 20 '
@@ -349,8 +355,12 @@ def make_HAMP_cloudmask(
     encoding['lat']['_FillValue'] = None
     encoding['lon']['_FillValue'] = None
     attrs['instrument'] = 'HAMP Microwave Radiometer'
-    attrs['source'] = 'Three RPG HALO MWR modules'
+    attrs['source'] = (
+        'From Three RPG HALO MWR modules, based on ' +
+        ' '.join(os.path.basename(s) for s in (retrieval_name, bahamas_name))
+    )
     attrs['title'] = 'HAMP Microwave Radiometer Cloud Mask'
+    attrs['references'] = 'Jacob et al. (2019, https://doi.org/10.5194/amt-12-3237-2019 )'
     radiometer_mask_ds.attrs.update(attrs)
 
     radiometer_mask_ds.to_netcdf(out_name.format(instrument='HAMP-MWR'), format='NETCDF4', encoding=encoding)
@@ -362,21 +372,21 @@ dates = [
     '20200126',
     '20200128',
     '20200130',
-    #'20200131', # TODO: Half of radar is missing
+    '20200131', # TODO: Half of radar is missing
     '20200202',
     '20200205',
     '20200207',
     '20200209',
     '20200211',
     '20200213',
-    #'20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
+    '20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
     '20200218', # ferry home
 ]
 for date in dates:
-    retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/hamp_II_lwp_iwv_{date}_v0.3.1.6_2020-10-30.nc'
+    retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/EUREC4A_HAMP-MWR_lwp_iwv_{date}_v0.4.0.1_2021-01-25.nc'
     bahamas_name=f'/data/hamp/flights/EUREC4A/unified/bahamas_{date}_v0.6.nc'
     radar_name=f'/data/hamp/flights/EUREC4A/unified/v0.6.1/radar_{date}_v0.6.nc'
-    out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_flag_{date}_v0.6.nc'
+    out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.6.1.nc'
     make_HAMP_cloudmask(
         retrieval_name,
         bahamas_name,
