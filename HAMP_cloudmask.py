@@ -10,6 +10,9 @@ import os.path
 
 # this is a 10x10-degree WGS84 geoid datum, in meters relative to the WGS84 reference ellipsoid. given the maximum slope, you should probably interpolate.
 # NIMA suggests a 2x2 interpolation using four neighbors. we'll go cubic spline
+# Original Source: Defense Mapping Agency. 12 Jan 1987. GPS UE Relevant WGS-84 Data Base Package. Washington, DC: Defense Mapping Agency.
+# via http://ncgia.ucsb.edu/units/u015/tables/table02.html
+# and https://github.com/bistromath/gr-air-modes/blob/master/python/mlat.py
 wgs84_geoid = np.array([[13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13],  # 90N
         [3, 1, -2, -3, -3, -3, -1, 3, 1, 5, 9, 11, 19, 27, 31, 34, 33, 34, 33, 34, 28, 23, 17, 13, 9, 4, 4, 1, -2, -2, 0, 2, 3, 2, 1, 1],  # 80N
         [2, 2, 1, -1, -3, -7, -14, -24, -27, -25, -19, 3, 24, 37, 47, 60, 61, 58, 51, 43, 29, 20, 12, 5, -2, -10, -14, -12, -10, -14, -12, -6, -2, 3, 6, 4],  # 70N
