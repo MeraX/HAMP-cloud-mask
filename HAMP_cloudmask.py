@@ -156,15 +156,16 @@ def make_HAMP_cloudmask(
 ):
 
     clutter_threshold = 4
-    retrieval = xarray.open_dataset(retrieval_name)
 
     ###
     # HAMP_MWR cloud mask
     #
     #0: clear, 1: maybe, 2: certain, -1: unknown
-    radiometer_mask = (retrieval.lwp_hamp > 0.02).astype(int)
-    radiometer_mask += (retrieval.lwp_hamp > 0.03).astype(int)
-    radiometer_mask[np.isnan(retrieval.lwp_hamp)] = Cloud_flag.unknown
+    retrieval = xarray.open_dataset(retrieval_name)
+
+    radiometer_mask = (retrieval.lwp_uc > 0.02).astype(int)
+    radiometer_mask += (retrieval.lwp_uc > 0.03).astype(int)
+    radiometer_mask[np.isnan(retrieval.lwp_uc)] = Cloud_flag.unknown
 
     ###
     # HAMP_RADAR cloud mask
@@ -368,31 +369,34 @@ def make_HAMP_cloudmask(
 
     radiometer_mask_ds.to_netcdf(out_name.format(instrument='HAMP-MWR'), format='NETCDF4', encoding=encoding)
 
-dates = [
-    #'20200119', # TODO: when retrieval is redone after solving the time offset in WF.
-    '20200122', # no radar
-    '20200124',
-    '20200126',
-    '20200128',
-    '20200130',
-    '20200131', # TODO: Half of radar is missing
-    '20200202',
-    '20200205',
-    '20200207',
-    '20200209',
-    '20200211',
-    '20200213',
-    '20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
-    '20200218', # ferry home
-]
-for date in dates:
-    retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/EUREC4A_HAMP-MWR_lwp_iwv_{date}_v0.4.0.1_2021-01-25.nc'
-    bahamas_name=f'/data/hamp/flights/EUREC4A/unified/bahamas_{date}_v0.6.nc'
-    radar_name=f'/data/hamp/flights/EUREC4A/unified/v0.6.1/radar_{date}_v0.6.nc'
-    out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.6.1.nc'
-    make_HAMP_cloudmask(
-        retrieval_name,
-        bahamas_name,
-        radar_name,
-        out_name,
-    )
+if __name__ == '__main__':
+    import glob
+    dates = [
+        '20200119',
+        '20200122', # no radar
+        '20200124',
+        '20200126',
+        '20200128',
+        '20200130',
+        '20200131', # TODO: Half of radar is missing
+        '20200202',
+        '20200205',
+        '20200207',
+        '20200209',
+        '20200211',
+        '20200213',
+        '20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
+        '20200218', # ferry home
+    ]
+    for date in dates:
+        #retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/EUREC4A_HAMP-MWR_lwp_iwv_{date}_v0.4.0.1_2021-01-25.nc'
+        retrieval_name=glob.glob(f'/home/mjacob/data/EUREC4A/LWPIWV_CERA/v0.4.0.4_2021-02-10/EUREC4A_HALO_HAMP_lwpiwv_l2_any_v0.8_{date}[0-9][0-9][0-9][0-9][0-9][0-9].nc')[0]
+        bahamas_name=f'/data/hamp/flights/EUREC4A/unified/bahamas_{date}_v0.6.nc'
+        radar_name=f'/data/hamp/flights/EUREC4A/unified/v0.6.1/radar_{date}_v0.6.nc'
+        out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.8.nc'
+        make_HAMP_cloudmask(
+            retrieval_name,
+            bahamas_name,
+            radar_name,
+            out_name,
+        )
