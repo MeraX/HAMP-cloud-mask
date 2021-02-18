@@ -18,13 +18,13 @@ def center_to_edge(center):
     return edge
 
 dates = [
-    #'20200119', # TODO: when retrieval is redone after solving the time offset in WF.
+    '20200119',
     '20200122', # no radar
     '20200124',
     '20200126',
     '20200128',
     '20200130',
-    #'20200131', # TODO
+    '20200131', # TODO
     '20200202',
     '20200205',
     '20200207',
@@ -36,17 +36,18 @@ dates = [
 ]
 for date in dates:
 
-    radar_ds = xarray.open_dataset(f'./out/netcdf/HAMP_RADAR_cloud_mask_{date}_v0.6.nc')
-    radiometer_ds = xarray.open_dataset(f'./out/netcdf/HAMP_MWR_cloud_mask_{date}_v0.6.nc')
+    cloud_mask_version = '0.8'
+    radar_ds = xarray.open_dataset(f'./out/netcdf/EUREC4A_HALO_HAMP-Radar_cloud_mask_{date}_v{cloud_mask_version}.nc')
+    radiometer_ds = xarray.open_dataset(f'./out/netcdf/EUREC4A_HALO_HAMP-MWR_cloud_mask_{date}_v{cloud_mask_version}.nc')
 
     radar = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/unified/radar_{date}_v0.6.nc')
     assert np.allclose((radar.time - radar_ds.time.values)/np.timedelta64(1, 's'), 0, atol=1)
     radar.assign_coords(time=radar_ds.time) # fix issue with time rounding
 
     if date in ('20200119', '20200218'):
-        wales_flag_hamp = xarray.full_like(radiometer_ds.cloud_flag, np.nan, dtype=float)
-        wales_top_hamp = xarray.full_like(radiometer_ds.cloud_flag, np.nan, dtype=float)
-        wales_ot_hamp = xarray.full_like(radiometer_ds.cloud_flag, np.nan, dtype=float)
+        wales_flag_hamp = xarray.full_like(radiometer_ds.cloud_mask, np.nan, dtype=float)
+        wales_top_hamp = xarray.full_like(radiometer_ds.cloud_mask, np.nan, dtype=float)
+        wales_ot_hamp = xarray.full_like(radiometer_ds.cloud_mask, np.nan, dtype=float)
     else:
         wales = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/{date}/WALES-LIDAR/EUREC4A_HALO_WALES_cloudtop_{date}a_V1.nc')
         wales_flag_hamp = wales.cloud_flag.rolling(time=5).mean().interp_like(radar_ds.time)
@@ -63,10 +64,10 @@ for date in dates:
         gridspec_kw=dict(height_ratios=[1, 2]),
     )
     ax.plot(wales_flag_hamp.time, wales_flag_hamp, '-', label='wales 1 s average')
-    ax.plot(radar_ds.time, radar_ds.cloud_flag + 0.1, '.', label='radar')
-    ax.plot(radiometer_ds.time, radiometer_ds.cloud_flag, '.', label='radiometer')
-    ax.set_yticks(radar_ds.cloud_flag.flag_values)
-    ax.set_yticklabels(radar_ds.cloud_flag.flag_meanings.split())
+    ax.plot(radar_ds.time, radar_ds.cloud_mask + 0.1, '.', label='radar')
+    ax.plot(radiometer_ds.time, radiometer_ds.cloud_mask, '.', label='radiometer')
+    ax.set_yticks(radar_ds.cloud_mask.flag_values)
+    ax.set_yticklabels(radar_ds.cloud_mask.flag_meanings.split())
     ax.legend()
     ax.grid()
 
@@ -77,17 +78,19 @@ for date in dates:
         ax2.pcolormesh(x, y, dBZ, vmin=-40, vmax=20, cmap='gray')
     ax2.plot(
         wales_top_hamp.time, wales_top_hamp.where(wales_ot_hamp>1) + wgs84_height(radar_ds.lon, radar_ds.lat),
+        '.',
         linewidth=0.5
     )
     ax2.plot(
         radar_ds.time, radar_ds.cloud_top + wgs84_height(radar_ds.lon, radar_ds.lat),
+        '.',
         linewidth=0.5
     )
     ax2.set_ylabel('Height above WGS84 (m)')
     ax2.set_ylim(0, 4500)
     ax2.grid()
     fig.tight_layout()
-    fig.savefig(f'./out/quicklooks/timeseries_{date}_v0.6.png', dpi=200)
+    fig.savefig(f'./out/quicklooks/timeseries_{date}_v{cloud_mask_version}.png', dpi=200)
     plt.close(fig)
 
 
@@ -96,7 +99,7 @@ for date in dates:
     #
     fig, axes = plt.subplots(ncols=2, figsize=(10, 4))
     h, xedges, yedges, QM = axes[0].hist2d(
-        radiometer_ds.cloud_flag.values, radar_ds.cloud_flag.values,
+        radiometer_ds.cloud_mask.values, radar_ds.cloud_mask.values,
         bins=[-1.5, -0.5, 0.5, 1.5, 2.5], vmin=0, vmax=1, density=True,
     )
     # print values into matrix plot
@@ -110,11 +113,11 @@ for date in dates:
                 verticalalignment='center',
             )
     axes[0].set_xlabel('radiometer')
-    axes[0].set_xticks(radiometer_ds.cloud_flag.flag_values)
-    axes[0].set_xticklabels(radiometer_ds.cloud_flag.flag_meanings.split())
+    axes[0].set_xticks(radiometer_ds.cloud_mask.flag_values)
+    axes[0].set_xticklabels(radiometer_ds.cloud_mask.flag_meanings.split())
     axes[0].set_ylabel('radar')
-    axes[0].set_yticks(radar_ds.cloud_flag.flag_values)
-    axes[0].set_yticklabels(radar_ds.cloud_flag.flag_meanings.split())
+    axes[0].set_yticks(radar_ds.cloud_mask.flag_values)
+    axes[0].set_yticklabels(radar_ds.cloud_mask.flag_meanings.split())
 
     finite = np.isfinite(radar_ds.cloud_top + wales_top_hamp.values)
     axes[1].hist((radar_ds.cloud_top-wales_top_hamp.values)[finite], bins=100, density=True)
@@ -135,5 +138,5 @@ for date in dates:
     axes[1].set_xlabel('radar top height - lidar top height')
 
     fig.tight_layout()
-    fig.savefig(f'./out/quicklooks/stats_{date}_v0.6.png', dpi=200)
+    fig.savefig(f'./out/quicklooks/stats_{date}_v{cloud_mask_version}.png', dpi=200)
     plt.close(fig)
