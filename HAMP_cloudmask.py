@@ -110,6 +110,56 @@ def length_of_True_chunks(mask):
     return np.diff(np.where(cc)[0])[::2] # length of phases between changes to False and than to True
 
 
+def find_sampling_gaps_narval(data_flag):
+    """Find measurement gap in NARVAL 1 and NARVAL 2 unified radar data
+
+    There are gaps in the 1 Hz data every about 30 seconds.
+    (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
+
+    We can easily find them in NARVAL 1 and 2 data, as
+    a) there is  no valid measurement (dBZ == NaN) for one time step and
+    b) a gap is no longer than one time step
+    """
+    gap_mask = (data_flag == Radar_flag.no_measurement).all('height')
+
+    same_as_previous = np.concatenate(([True], gap_mask.values[:-1] == gap_mask[1:]))
+    same_as_next = np.concatenate((gap_mask.values[:-1] == gap_mask[1:], [True]))
+    gap_mask[same_as_previous | same_as_next] = False # A gap must be only one time step. If if the previous or next were also gaps, remove this gap.
+    # Check that there is always no more than one consecutive gap time step
+    assert length_of_True_chunks(gap_mask).max() <= 1, 'something went wrong in constraining the gaps'
+
+    return gap_mask
+
+
+def find_sampling_gaps_eurec4a(data_flag):
+    """Find measurement gap in EUREC4A unified radar data
+
+    There are gaps in the 1 Hz data every about 30 seconds.
+    (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
+
+    Gaps are a bit trickier to find in EUREC4A than in NARVAL.
+    see find_sampling_gaps_narval()
+
+    A gab in EUREC4A can only be identified in cloudy scenes.
+    If a gap is adjacent in time to a cloud object there are NaN values in the range gates of
+    the adjacent cloud in the gap time step. The clear sky above an below the cloud level
+    shows the common clear sky value (-888). At the same time, the original data_flag shows 0.
+    (I.e. the NaNs are not caused by any other filter like "side lobe".)
+    """
+    gap_mask = (
+        (data_flag == Radar_flag.no_measurement) # either NaN
+        ^ (data_flag == Radar_flag.clear) # or "clear sky" (xor)
+    ).all('height')
+
+    same_as_previous = np.concatenate(([True], gap_mask.values[:-1] == gap_mask[1:]))
+    same_as_next = np.concatenate((gap_mask.values[:-1] == gap_mask[1:], [True]))
+    gap_mask[same_as_previous | same_as_next] = False # A gap must be only one time step. If if the previous or next were also gaps, remove this gap.
+    # Check that there is always no more than one consecutive gap time step
+    assert length_of_True_chunks(gap_mask).max() <= 1, 'something went wrong in constraining the gaps'
+
+    return gap_mask
+
+
 def make_HAMP_cloudmask(
     retrieval_name,
     bahamas_name,
@@ -152,39 +202,34 @@ def make_HAMP_cloudmask(
             (radar.data_flag.long_name == '1: noise; 2: surface; 3: sea; 4: radar calibration')
         ), radar.data_flag.long_name
 
+        # if roll angle > 5, radar gates at altitude >  150 m are affected by sidle lobe echo of the ground
+        data_flag.values[(np.abs(bahamas['roll']) > 5)] = Radar_flag.high_roll # high roll angle
+
         if radar_name[-23:-10] in ('/radar_201312', '/radar_201608'): # NARVAL
             assert np.isneginf(dBZ).any(), 'neginf should be used to mark "measured, but nothing seen, i.e. signal below noise detection" pixels'
             data_flag.values[np.isneginf(dBZ) & (data_flag==Radar_flag.good)] = Radar_flag.clear
+            data_flag.values[np.isnan(dBZ) & (data_flag==Radar_flag.good)] = Radar_flag.no_measurement
+
+            gap_mask = find_sampling_gaps_narval(data_flag)
         else: # EUREC4A
             assert not np.isneginf(dBZ).any(), 'neginf should not be used anymore to mark "measured, but nothing seen, i.e. signal below noise detection" pixels'
             radar_raw = xarray.open_dataset(radar_name, mask_and_scale=False)
             assert radar_raw.dBZ.missing_value == -888., '-888. should have been used to mark "measurement, but nothing seen"'
             data_flag.values[(radar_raw.dBZ == radar_raw.dBZ.missing_value) & (data_flag==Radar_flag.good)] = Radar_flag.clear
+            assert np.isnan(radar_raw.dBZ._FillValue), '_FillValue should be NaN and is assumed to be used for time gaps in clouds, above the aircraft, and when side lobes are removed in curves'
+            data_flag.values[np.isnan(radar_raw.dBZ) & (data_flag==Radar_flag.good)] = Radar_flag.no_measurement
+
+            gap_mask = find_sampling_gaps_eurec4a(data_flag)
 
         assert  Radar_flag.clear in data_flag.values, 'Could not find any clear sky. That is suspicious. Maybe the identification is wrong?'
 
-        # if roll angle > 5, radar gates at altitude >  150 m are affected by sidle lobe echo of the ground
-        data_flag.values[(np.abs(bahamas['roll']) > 5)] = Radar_flag.high_roll # high roll angle
-
-        data_flag.values[np.isnan(dBZ) & (data_flag==0)] = Radar_flag.no_measurement
-        # There are gaps in the 1 Hz data every about 30 seconds. (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
-        # Filter for small clouds/clutter pixels, than fix these gaps!
-        gap_mask = (data_flag == Radar_flag.no_measurement).all('height') # measurement 'gaps' in 1 Hz time series
-
-        same_as_previous = np.concatenate(([True], gap_mask.values[:-1] == gap_mask[1:]))
-        same_as_next = np.concatenate((gap_mask.values[:-1] == gap_mask[1:], [True]))
-        gap_mask[same_as_previous | same_as_next] = False # A gap must be only one time step. If if the previous or next were also gaps, remove this gap.
-        assert length_of_True_chunks(gap_mask).max() <= 1, 'something went wrong in constraining the gaps'
-
+        # First look at true data that is not during a time gap to filter for small clouds/clutter pixels
         dBZ_observed = dBZ.isel(time=~gap_mask)
         data_flag_observed = data_flag.isel(time=~gap_mask)
 
         radar_mask_obseverd = calc_radar_mask(data_flag_observed, clutter_threshold=clutter_threshold)
 
-        # fill measurement gaps in dBZ and radar_mask
-        dBZ_interpolated = dBZ_observed.interp(time=dBZ.time, method='nearest',
-            kwargs=dict(fill_value=np.nan))
-
+        # fill measurement gaps in data_flag and radar_mask
         data_flag = data_flag_observed.interp(time=dBZ.time, method='nearest',
             kwargs=dict(fill_value=Radar_flag.no_measurement))
         data_flag = data_flag.astype(int)
@@ -334,21 +379,21 @@ def make_HAMP_cloudmask(
 if __name__ == '__main__':
     import glob
     dates = [
-        '20200119',
-        '20200122', # no radar
-        '20200124',
-        '20200126',
-        '20200128',
-        '20200130',
-        '20200131', # TODO: Half of radar is missing
-        '20200202',
-        '20200205',
-        '20200207',
-        '20200209',
+       # '20200119',
+       # '20200122', # no radar
+       # '20200124',
+       # '20200126',
+       # '20200128',
+       # '20200130',
+       # '20200131', # TODO: Half of radar is missing
+       # '20200202',
+       # '20200205',
+       # '20200207',
+       # '20200209',
         '20200211',
-        '20200213',
-        '20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
-        '20200218', # ferry home
+       # '20200213',
+       # '20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
+       # '20200218', # ferry home
     ]
     for date in dates:
         #retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/EUREC4A_HAMP-MWR_lwp_iwv_{date}_v0.4.0.1_2021-01-25.nc'
