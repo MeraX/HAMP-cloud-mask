@@ -8,6 +8,19 @@ import os.path
 
 from wgs64_geoid import wgs84_height
 
+"""HAMP cloud masks
+
+Derive HAMP cloud mask products from microwave radiometer retrieval
+and cloud radar.
+
+Preparation:
+  * make direktory
+    ./out/quicklooks
+  * adjust input paths in the following three variables at the end of the script
+    retrieval_name
+    bahamas_name
+    radar_name
+"""
 @enum.unique
 class Radar_flag(enum.IntEnum):
     clear = -1 # clear sky signal
@@ -379,28 +392,27 @@ def make_HAMP_cloudmask(
 if __name__ == '__main__':
     import glob
     dates = [
-       # '20200119',
-       # '20200122', # no radar
-       # '20200124',
-       # '20200126',
-       # '20200128',
-       # '20200130',
-       # '20200131', # TODO: Half of radar is missing
-       # '20200202',
-       # '20200205',
-       # '20200207',
-       # '20200209',
+        '20200119',
+        '20200122', # no radar
+        '20200124',
+        '20200126',
+        '20200128',
+        '20200130',
+        '20200131',
+        '20200202',
+        '20200205',
+        '20200207',
+        '20200209',
         '20200211',
-       # '20200213',
-       # '20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
-       # '20200218', # ferry home
+        '20200213',
+        '20200215',
+        '20200218',
     ]
     for date in dates:
-        #retrieval_name=f'/home/mjacob/data/EUREC4A/LWP_IWV/EUREC4A_HAMP-MWR_lwp_iwv_{date}_v0.4.0.1_2021-01-25.nc'
-        retrieval_name=glob.glob(f'/home/mjacob/data/EUREC4A/LWPIWV_CERA/v0.4.0.4_2021-02-10/EUREC4A_HALO_HAMP_lwpiwv_l2_any_v0.8_{date}[0-9][0-9][0-9][0-9][0-9][0-9].nc')[0]
-        bahamas_name=f'/data/hamp/flights/EUREC4A/unified/bahamas_{date}_v0.6.nc'
-        radar_name=f'/data/hamp/flights/EUREC4A/unified/v0.6.1/radar_{date}_v0.6.nc'
-        out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.8.nc'
+        retrieval_name=glob.glob(f'EUREC4A_HALO_HAMP_lwpiwv_l2_any_v0.8_{date}[0-9][0-9][0-9][0-9][0-9][0-9].nc')[0]
+        bahamas_name=f'bahamas_{date}_v0.9.nc'
+        radar_name=f'radar_{date}_v0.9.nc'
+        out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.9.nc'
         make_HAMP_cloudmask(
             retrieval_name,
             bahamas_name,

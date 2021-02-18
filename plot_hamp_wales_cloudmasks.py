@@ -8,6 +8,16 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 from wgs64_geoid import wgs84_height
 
+"""
+Make quick look plots of the HAMP cloudmasks
+Compare HAMP MWR, Radar and WALES
+
+Preparation:
+  * make direktory
+    ./out/quicklooks
+  * adjust paths in open_dataset (4 times)
+"""
+
 def center_to_edge(center):
     center = np.asarray(center)
     edge =  np.empty(center.shape[0]+1, dtype=center.dtype)
@@ -24,23 +34,23 @@ dates = [
     '20200126',
     '20200128',
     '20200130',
-    '20200131', # TODO
+    '20200131',
     '20200202',
     '20200205',
     '20200207',
     '20200209',
     '20200211',
     '20200213',
-    #'20200215', # alto strato flight at flight levels the LWP was not trained for. further, the alto is not really shallow
-    '20200218', # ferry home
+    '20200215',
+    '20200218',
 ]
 for date in dates:
 
-    cloud_mask_version = '0.8'
+    cloud_mask_version = '0.9'
     radar_ds = xarray.open_dataset(f'./out/netcdf/EUREC4A_HALO_HAMP-Radar_cloud_mask_{date}_v{cloud_mask_version}.nc')
     radiometer_ds = xarray.open_dataset(f'./out/netcdf/EUREC4A_HALO_HAMP-MWR_cloud_mask_{date}_v{cloud_mask_version}.nc')
 
-    radar = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/unified/radar_{date}_v0.6.nc')
+    radar = xarray.open_dataset(f'radar_{date}_v0.9.nc')
     assert np.allclose((radar.time - radar_ds.time.values)/np.timedelta64(1, 's'), 0, atol=1)
     radar.assign_coords(time=radar_ds.time) # fix issue with time rounding
 
@@ -49,7 +59,7 @@ for date in dates:
         wales_top_hamp = xarray.full_like(radiometer_ds.cloud_mask, np.nan, dtype=float)
         wales_ot_hamp = xarray.full_like(radiometer_ds.cloud_mask, np.nan, dtype=float)
     else:
-        wales = xarray.open_dataset(f'/data/hamp/flights/EUREC4A/{date}/WALES-LIDAR/EUREC4A_HALO_WALES_cloudtop_{date}a_V1.nc')
+        wales = xarray.open_dataset(f'EUREC4A_HALO_WALES_cloudtop_{date}a_V1.nc')
         wales_flag_hamp = wales.cloud_flag.rolling(time=5).mean().interp_like(radar_ds.time)
         wales_top_hamp = wales.cloud_top.rolling(time=5).mean().interp_like(radar_ds.time)
         wales_ot_hamp = wales.cloud_ot.rolling(time=5).mean().interp_like(radar_ds.time)
