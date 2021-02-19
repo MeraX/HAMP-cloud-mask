@@ -25,9 +25,9 @@ Preparation:
 """
 
 
-unified_data_dir = ""
-WALES_data_dir = ""
-retrieval_data_dir = ""
+unified_data_dir = "/data/hamp/flights/EUREC4A/unified/v0.9"
+WALES_data_dir = "/data/hamp/flights/EUREC4A/20200205/WALES-LIDAR/"
+retrieval_data_dir = "/home/mjacob/data/EUREC4A/LWPIWV_CERA/v0.4.0.4_2021-02-10/"
 
 
 def center_to_edge(center):
@@ -133,7 +133,7 @@ ax1.set_yscale('magnifylinear', magnify_segments=[[-20., 20., 10.]])
 ax1.set_yticks([-20, 0, 20, 300, 600, 900])
 ax1.set_ylabel('Condensate (g/m²)')
 
-ax.set_xlim(start, end)
+ax.set_xlim(np.datetime64(start), np.datetime64(end))
 fig.tight_layout()
 fig.savefig(f'./out/quicklooks/timeseries_{start}_v{cloud_mask_version}.png', dpi=150)
 plt.close(fig)
