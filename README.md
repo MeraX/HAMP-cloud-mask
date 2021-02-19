@@ -8,12 +8,20 @@ radiometer.
 
 ## Requirements
 Python >= 3.6 and following python packages:
-  * numpy (tested with version 1.18.1 and 1.19.0)
-  * scipy (tested with version 1.2.0 and 1.5.1)
-  * xarray (tested with version 0.14.1 and 0.15.1)
-  * matplotlib (tested with version 3.1.2 and 3.2.2)
-  * mpl_toolkits (probably part of matplotlib)
-  * cv2 (tested with version 4.4.0)
+
+  * `numpy` (tested with version 1.18.1 and 1.19.0)
+  * `scipy` (tested with version 1.2.0 and 1.5.1)
+  * `xarray` (tested with version 0.14.1 and 0.15.1)
+  * `matplotlib` (tested with version 3.1.2 and 3.2.2)
+  * `mpl_toolkits` (probably part of matplotlib)
+  * `cv2` (tested with version 4.4.0)
+
+For `plot_hamp_wales_specmacs.py`:
+
+  * `eurec4a` (tested with version 0.0.2, need the additional packages `pydap` and `intake-xarray`	)
+  * `pydap` (tested with version 3.2.2)
+  * `intake-xarray` (tested with version 0.6.0)
+
 
 ## License
 HAMP-cloud-mask is free software; you can redistribute it and/or modify
