@@ -5,13 +5,14 @@ This Python generates cloud mask using the HAMP cloud radar and microwave
 radiometer.
 
 ## Requirements
-Python >= 3.6 and following python packages:
+Python >= 3.6 and following PyPI python packages:
   * numpy (tested with version 1.18.1 and 1.19.0)
   * scipy (tested with version 1.2.0 and 1.5.1)
   * xarray (tested with version 0.14.1 and 0.15.1)
   * matplotlib (tested with version 3.1.2 and 3.2.2)
   * mpl_toolkits (probably part of matplotlib)
   * cv2 (tested with version 4.4.0)
+  * eurec4a
 
 
 ## License
