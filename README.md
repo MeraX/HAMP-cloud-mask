@@ -1,12 +1,20 @@
 # HAMP-cloud-mask
 HALO Microwave Package (HAMP) Cloud Mask Products
 
-This Python generates cloud mask using the HAMP cloud radar and microwave 
+This Python generates cloud mask using the HAMP cloud radar and microwave
 radiometer.
 
+## Requirements
+Python >= 3.6 and following python packages:
+  * numpy (tested with version 1.18.1 and 1.19.0)
+  * scipy (tested with version 1.2.0 and 1.5.1)
+  * xarray (tested with version 0.14.1 and 0.15.1)
+  * matplotlib (tested with version 3.1.2 and 3.2.2)
+  * mpl_toolkits (probably part of matplotlib)
+  * cv2 (tested with version 4.4.0)
 
 
-## Licence
+## License
 HAMP-cloud-mask is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation version 3
