@@ -6,7 +6,7 @@ import glob
 
 import eurec4a
 
-from wgs64_geoid import wgs84_height
+from wgs84_geoid import wgs84_height
 import MagnifyLinearScale
 
 

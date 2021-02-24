@@ -3,14 +3,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
-from wgs64_geoid import wgs84_height
+from wgs84_geoid import wgs84_height
 
 """
 Make quick look plots of the HAMP cloudmasks
 Compare HAMP MWR, Radar and WALES
 
 Preparation:
-  * make direktory
+  * make directory
     ./out/quicklooks
   * adjust paths:
     unified_data_dir

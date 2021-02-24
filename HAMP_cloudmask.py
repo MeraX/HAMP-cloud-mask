@@ -6,7 +6,7 @@ import datetime
 import enum
 import os.path
 
-from wgs64_geoid import wgs84_height
+from wgs84_geoid import wgs84_height
 
 """HAMP cloud masks
 
@@ -14,7 +14,7 @@ Derive HAMP cloud mask products from microwave radiometer retrieval
 and cloud radar.
 
 Preparation:
-  * make direktory
+  * make directory
     ./out/quicklooks
   * adjust input paths in the following three variables at the end of the script
     retrieval_name
@@ -127,7 +127,7 @@ def find_sampling_gaps_narval(data_flag):
     """Find measurement gap in NARVAL 1 and NARVAL 2 unified radar data
 
     There are gaps in the 1 Hz data every about 30 seconds.
-    (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
+    (Probably they were caused by the radar sampling rate with is slightly > than 1 Hz )
 
     We can easily find them in NARVAL 1 and 2 data, as
     a) there is  no valid measurement (dBZ == NaN) for one time step and
@@ -147,8 +147,10 @@ def find_sampling_gaps_narval(data_flag):
 def find_sampling_gaps_eurec4a(data_flag):
     """Find measurement gap in EUREC4A unified radar data
 
-    There are gaps in the 1 Hz data every about 30 seconds.
-    (Probably they where caused by the radar sampling rate with is slightly > than 1 Hz )
+    There are gaps in the 1 Hz data every about 42 seconds.
+    (The gaps were probably caused by the radar having a sampling rate of 1.024 Hz.
+    This rate comes from an averaging of 30 FFTs each calculated over 256 pulses at a
+    pulse repetition rate of 7500 Hz)
 
     Gaps are a bit trickier to find in EUREC4A than in NARVAL.
     see find_sampling_gaps_narval()
@@ -237,12 +239,14 @@ def make_HAMP_cloudmask(
         assert  Radar_flag.clear in data_flag.values, 'Could not find any clear sky. That is suspicious. Maybe the identification is wrong?'
 
         # First look at true data that is not during a time gap to filter for small clouds/clutter pixels
+        # Data outside the gap are true and unrepeated measurements.
         dBZ_observed = dBZ.isel(time=~gap_mask)
         data_flag_observed = data_flag.isel(time=~gap_mask)
 
         radar_mask_obseverd = calc_radar_mask(data_flag_observed, clutter_threshold=clutter_threshold)
 
-        # fill measurement gaps in data_flag and radar_mask
+        # fill measurement gaps in data_flag and radar_mask by nearest neighbor interpolation.
+        # (I.e. repeat the value of before or after.)
         data_flag = data_flag_observed.interp(time=dBZ.time, method='nearest',
             kwargs=dict(fill_value=Radar_flag.no_measurement))
         data_flag = data_flag.astype(int)
