@@ -263,6 +263,7 @@ def make_HAMP_cloudmask(
     ###
     # export as NC
     #
+    dtype_flag = np.int16 # A int8 would be enough, but OPeNDAP can not handle negative int8, so we use int16 instead
 
     radar_mask_ds = xarray.Dataset(
         {'time': bahamas.time}
@@ -291,14 +292,15 @@ def make_HAMP_cloudmask(
             + 'height of the upper most range gate having a signal above noise level.'
         ),
     )
-    radar_mask_ds['cloud_mask'] = ['time'], radar_mask.values.astype(np.int8), dict(
+    flag_values = np.array(
+        [Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
+        dtype=dtype_flag
+    )
+    radar_mask_ds['cloud_mask'] = ['time'], radar_mask.values.astype(dtype_flag), dict(
         long_name='cloud flag',
-        flag_values=np.array(
-            [Cloud_flag.unknown,
-            Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
-            dtype=np.int8
-        ),
-        flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
+        flag_values=flag_values,
+        flag_meanings='no_cloud_detectable probably_cloudy most_likely_cloudy',
+        valid_range=np.array([min(flag_values), max(flag_values)]),
         description=(
             'For this mask the observations of radar reflectivity are used. Radar reflectivity is '
             + 'first filtered for clutter. Then if there is any signal above the noise level at '
@@ -317,6 +319,7 @@ def make_HAMP_cloudmask(
     encoding['lat']['_FillValue'] = None
     assert np.all(np.isfinite(radar_mask_ds.lon))
     encoding['lon']['_FillValue'] = None
+    encoding['cloud_mask']['_FillValue'] = Cloud_flag.unknown
 
     # Some meta data
     attrs = collections.OrderedDict()
@@ -362,13 +365,15 @@ def make_HAMP_cloudmask(
 
     rmv = radiometer_mask.values
     rmv[radiometer_mask_ds.lat>20] = Cloud_flag.unknown # We don't use the LWP retrieval north of 20 deg N.
-    radiometer_mask_ds['cloud_mask'] = ['time'], rmv.astype(np.int8), dict(
+    flag_values = np.array(
+        [Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
+        dtype=dtype_flag
+    )
+    radiometer_mask_ds['cloud_mask'] = ['time'], rmv.astype(dtype_flag), dict(
         long_name='cloud flag',
-        flag_values=np.array(
-            [Cloud_flag.unknown, Cloud_flag.clear, Cloud_flag.probably, Cloud_flag.certain],
-            dtype=np.int8
-        ),
-        flag_meanings='unknown no_cloud_detectable probably_cloudy most_likely_cloudy',
+        flag_values=flag_values,
+        flag_meanings='no_cloud_detectable probably_cloudy most_likely_cloudy',
+        valid_range=np.array([min(flag_values), max(flag_values)]),
         description=(
             'For this mask liquid water path (LWP) retrieval by Jacob et al. (2019, AMT, '
             + 'https://doi.org/10.5194/amt-12-3237-2019) is used but without applying the '
@@ -382,6 +387,7 @@ def make_HAMP_cloudmask(
     encoding['time']['_FillValue'] = None
     encoding['lat']['_FillValue'] = None
     encoding['lon']['_FillValue'] = None
+    encoding['cloud_mask']['_FillValue'] = Cloud_flag.unknown
     attrs['instrument'] = 'HAMP Microwave Radiometer'
     attrs['source'] = (
         'From Three RPG HALO MWR modules, based on ' +
@@ -413,10 +419,12 @@ if __name__ == '__main__':
         '20200218',
     ]
     for date in dates:
-        retrieval_name=glob.glob(f'EUREC4A_HALO_HAMP_lwpiwv_l2_any_v0.8_{date}[0-9][0-9][0-9][0-9][0-9][0-9].nc')[0]
-        bahamas_name=f'bahamas_{date}_v0.9.nc'
-        radar_name=f'radar_{date}_v0.9.nc'
-        out_name=f'./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.9.nc'
+        retrieval_name = glob.glob(
+            f"EUREC4A_HALO_HAMP_lwpiwv_l2_any_v0.8_{date}[0-9][0-9][0-9][0-9][0-9][0-9].nc"
+        )[0]
+        bahamas_name = f"bahamas_{date}_v0.9.nc"
+        radar_name = f"radar_{date}_v0.9.nc"
+        out_name = f"./out/netcdf/EUREC4A_HALO_{{instrument}}_cloud_mask_{date}_v0.9.1.nc"  # uses int16 for cloud mask
         make_HAMP_cloudmask(
             retrieval_name,
             bahamas_name,
